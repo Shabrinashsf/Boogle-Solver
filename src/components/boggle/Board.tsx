@@ -6,7 +6,9 @@ type BoardProps = {
   board: string[][];
   size: number;
   highlightedCells?: Set<string>;
+  invalidCells?: Set<string>;
   onCellChange: (row: number, col: number, value: string) => void;
+  onInvalidInput?: (row: number, col: number, isInvalid: boolean) => void;
 };
 
 const cellSizeMap: Record<number, string> = {
@@ -18,7 +20,14 @@ const cellSizeMap: Record<number, string> = {
   8: "h-11 w-11 text-lg",
 };
 
-export function Board({ board, size, highlightedCells, onCellChange }: BoardProps) {
+export function Board({
+  board,
+  size,
+  highlightedCells,
+  invalidCells,
+  onCellChange,
+  onInvalidInput,
+}: BoardProps) {
   const totalCells = size * size;
   const inputRefs = React.useRef<Array<HTMLInputElement | null>>([]);
 
@@ -39,8 +48,16 @@ export function Board({ board, size, highlightedCells, onCellChange }: BoardProp
     colIndex: number,
     rawValue: string
   ) => {
-    const nextValue = rawValue.replace(/[^a-zA-Z]/g, "").slice(0, 1);
-    const normalized = nextValue.toUpperCase();
+    const sanitized = rawValue.replace(/[^a-zA-Z]/g, "");
+    const normalized = sanitized.slice(0, 1).toUpperCase();
+    const hasInvalid = rawValue.length > 0 && sanitized.length !== rawValue.length;
+
+    if (hasInvalid) {
+      onInvalidInput?.(rowIndex, colIndex, true);
+      return;
+    }
+
+    onInvalidInput?.(rowIndex, colIndex, false);
     onCellChange(rowIndex, colIndex, normalized);
 
     if (normalized) {
@@ -106,14 +123,17 @@ export function Board({ board, size, highlightedCells, onCellChange }: BoardProp
           row.map((letter, colIndex) => {
             const key = `${rowIndex}-${colIndex}`;
             const highlighted = highlightedCells?.has(key);
+            const invalid = invalidCells?.has(key);
 
             return (
               <div
                 key={key}
                 className={`flex items-center justify-center rounded-lg border shadow-sm transition-colors ${
-                  highlighted
-                    ? "bg-highlight border-highlight-border"
-                    : "bg-surface-container-lowest border-outline-variant"
+                  invalid
+                    ? "bg-red-50 border-red-300"
+                    : highlighted
+                      ? "bg-highlight border-highlight-border"
+                      : "bg-surface-container-lowest border-outline-variant"
                 }`}
               >
                 <input

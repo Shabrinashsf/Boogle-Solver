@@ -192,6 +192,12 @@ export default function Home() {
   const [hoveredWord, setHoveredWord] = React.useState<WordResult | null>(null);
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [isSolving, setIsSolving] = React.useState(false);
+  const [targetInputError, setTargetInputError] = React.useState<string | null>(
+    null
+  );
+  const [invalidCells, setInvalidCells] = React.useState<Set<string>>(
+    () => new Set()
+  );
 
   const selectedResult = React.useMemo(
     () => results.find((item) => item.word === activeWord) ?? null,
@@ -209,6 +215,12 @@ export default function Home() {
     }
   }, [activeWord, results]);
 
+  React.useEffect(() => {
+    if (mode !== "target") {
+      setTargetInputError(null);
+    }
+  }, [mode]);
+
   const handleBoardChange = (row: number, col: number, value: string) => {
     setBoard((prev) => {
       const next = prev.map((rowCells) => [...rowCells]);
@@ -218,11 +230,29 @@ export default function Home() {
     setHoveredWord(null);
   };
 
+  const handleInvalidInput = (
+    row: number,
+    col: number,
+    isInvalid: boolean
+  ) => {
+    const key = `${row}-${col}`;
+    setInvalidCells((prev) => {
+      const next = new Set(prev);
+      if (isInvalid) {
+        next.add(key);
+      } else {
+        next.delete(key);
+      }
+      return next;
+    });
+  };
+
   const handleClearBoard = () => {
     setBoard(createEmptyBoard(boardSize));
     setResults([]);
     setActiveWord(null);
     setHoveredWord(null);
+    setInvalidCells(new Set());
   };
 
   const handleRandomFill = () => {
@@ -230,6 +260,7 @@ export default function Home() {
     setResults([]);
     setActiveWord(null);
     setHoveredWord(null);
+    setInvalidCells(new Set());
   };
 
   const handleSizeChange = (value: number) => {
@@ -238,6 +269,7 @@ export default function Home() {
     setResults([]);
     setActiveWord(null);
     setHoveredWord(null);
+    setInvalidCells(new Set());
   };
 
   const handleSolve = async () => {
@@ -246,12 +278,18 @@ export default function Home() {
     setActiveWord(null);
 
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         board,
         mode,
-        min_length: minLength,
-        target_word: mode === "target" ? targetWord.trim().toUpperCase() : "",
       };
+
+      if (mode === "global") {
+        payload.min_length = minLength;
+      }
+
+      if (mode === "target") {
+        payload.target_word = targetWord.trim().toUpperCase();
+      }
 
       const response = await fetch("/api/solve", {
         method: "POST",
@@ -334,10 +372,46 @@ export default function Home() {
                   <Input
                     placeholder="Type the word to find"
                     value={targetWord}
-                    onChange={(event) =>
-                      setTargetWord(event.target.value.toUpperCase())
-                    }
+                    onChange={(event) => {
+                      const rawValue = event.target.value;
+                      const sanitized = rawValue.replace(/[^a-zA-Z]/g, "");
+                      const normalized = sanitized.toUpperCase();
+                      const truncated = normalized.slice(0, 8);
+                      setTargetWord(truncated);
+
+                      if (!rawValue) {
+                        setTargetInputError(null);
+                        return;
+                      }
+
+                      if (sanitized.length !== rawValue.length) {
+                        setTargetInputError("Only letters A-Z are allowed.");
+                        return;
+                      }
+
+                      if (normalized.length > 8) {
+                        setTargetInputError("Maximum length is 8 letters.");
+                        return;
+                      }
+
+                      if (truncated.length < 3) {
+                        setTargetInputError("Minimum length is 3 letters.");
+                        return;
+                      }
+
+                      setTargetInputError(null);
+                    }}
                   />
+                  {targetInputError && (
+                    <p className="text-xs font-medium text-red-600">
+                      {targetInputError}
+                    </p>
+                  )}
+                  {!targetInputError && (
+                    <p className="text-xs text-on-surface-variant">
+                      Use 3-8 letters (A-Z).
+                    </p>
+                  )}
                 </div>
               )}
               <div className="space-y-2">
@@ -358,31 +432,37 @@ export default function Home() {
                   ))}
                 </select>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-on-surface-variant">
-                  Minimum Word Length
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    className="flex-1 accent-primary"
-                    max={8}
-                    min={3}
-                    type="range"
-                    value={minLength}
-                    onChange={(event) =>
-                      setMinLength(Number(event.target.value))
-                    }
-                  />
-                  <span className="w-6 text-center text-sm font-medium text-on-surface">
-                    {minLength}
-                  </span>
+              {mode === "global" && (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-on-surface-variant">
+                    Minimum Word Length
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      className="flex-1 accent-primary"
+                      max={8}
+                      min={3}
+                      type="range"
+                      value={minLength}
+                      onChange={(event) =>
+                        setMinLength(Number(event.target.value))
+                      }
+                    />
+                    <span className="w-6 text-center text-sm font-medium text-on-surface">
+                      {minLength}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              )}
               <Button
                 className="w-full"
                 variant="default"
                 disabled={
-                  isSolving || (mode === "target" && !targetWord.trim())
+                  isSolving ||
+                  (mode === "target" &&
+                    (targetWord.trim().length < 3 ||
+                      targetWord.trim().length > 8 ||
+                      !!targetInputError))
                 }
                 onClick={handleSolve}
               >
@@ -426,11 +506,19 @@ export default function Home() {
             style={{ animationDelay: "240ms" }}
           >
             <CardContent className="mt-0 flex h-full flex-col items-center justify-center gap-6">
+              {invalidCells.size > 0 && (
+                <div className="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  Only letters A-Z are allowed. Please replace any invalid
+                  characters.
+                </div>
+              )}
               <Board
                 board={board}
                 highlightedCells={highlightedCells}
+                invalidCells={invalidCells}
                 size={boardSize}
                 onCellChange={handleBoardChange}
+                onInvalidInput={handleInvalidInput}
               />
               <div className="text-center">
                 <p className="text-sm text-on-surface-variant">
