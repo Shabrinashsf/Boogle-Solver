@@ -70,9 +70,32 @@ const normalizePath = (path: unknown): WordPathNode[] | undefined => {
         return { row: Number(node[0]), col: Number(node[1]) };
       }
 
-      if (node && typeof node === "object" && "row" in node && "col" in node) {
-        const record = node as { row: number; col: number };
-        return { row: Number(record.row), col: Number(record.col) };
+      if (node && typeof node === "object") {
+        const record = node as Record<string, unknown>;
+        const row =
+          typeof record.row === "number"
+            ? record.row
+            : typeof record.r === "number"
+            ? record.r
+            : typeof record.row === "string"
+            ? Number(record.row)
+            : typeof record.r === "string"
+            ? Number(record.r)
+            : NaN;
+        const col =
+          typeof record.col === "number"
+            ? record.col
+            : typeof record.c === "number"
+            ? record.c
+            : typeof record.col === "string"
+            ? Number(record.col)
+            : typeof record.c === "string"
+            ? Number(record.c)
+            : NaN;
+
+        if (Number.isFinite(row) && Number.isFinite(col)) {
+          return { row, col };
+        }
       }
 
       return null;
@@ -288,7 +311,7 @@ export default function Home() {
       }
 
       if (mode === "target") {
-        payload.target_word = targetWord.trim().toUpperCase();
+        payload.target = targetWord.trim().toUpperCase();
       }
 
       const response = await fetch("/api/solve", {
@@ -333,8 +356,8 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto grid w-full max-w-[1360px] grid-cols-1 gap-6 px-6 py-8 md:grid-cols-12">
-        <aside className="md:col-span-3 flex flex-col gap-6">
+      <main className="mx-auto grid w-full max-w-[1360px] min-h-[calc(100vh-4rem)] grid-cols-1 gap-6 px-6 py-8 md:grid-cols-12">
+        <aside className="md:col-span-3 flex flex-col gap-6 md:h-[calc(100vh-7rem)]">
           <Card className="animate-fade-up" style={{ animationDelay: "80ms" }}>
             <CardHeader>
               <CardTitle>Solver Mode</CardTitle>
@@ -500,9 +523,9 @@ export default function Home() {
           </Card>
         </aside>
 
-        <section className="md:col-span-6 flex flex-col">
+        <section className="md:col-span-6 flex flex-col gap-6 md:h-[calc(100vh-7rem)]">
           <Card
-            className="flex-1 animate-fade-up"
+            className="flex-1 animate-fade-up overflow-hidden"
             style={{ animationDelay: "240ms" }}
           >
             <CardContent className="mt-0 flex h-full flex-col items-center justify-center gap-6">
@@ -540,12 +563,12 @@ export default function Home() {
           </Card>
         </section>
 
-        <aside className="md:col-span-3 flex flex-col">
+        <aside className="md:col-span-3 flex flex-col gap-6 md:h-[calc(100vh-7rem)]">
           <Card
-            className="flex h-full flex-col animate-fade-up"
+            className="flex h-full min-h-0 flex-col animate-fade-up overflow-hidden"
             style={{ animationDelay: "320ms" }}
           >
-            <CardContent className="mt-0 flex h-full flex-col">
+            <CardContent className="mt-0 flex h-full min-h-0 flex-col">
               <List
                 results={results}
                 activeWord={activeWord}
