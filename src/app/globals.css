@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f8faf7;
+  --on-background: #191c1b;
+  --surface: #f8faf7;
+  --surface-dim: #d8dbd8;
+  --surface-bright: #f8faf7;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #f2f4f1;
+  --surface-container: #eceeec;
+  --surface-container-high: #e7e9e6;
+  --surface-container-highest: #e1e3e0;
+  --surface-variant: #e1e3e0;
+  --on-surface: #191c1b;
+  --on-surface-variant: #404946;
+  --primary: #34675c;
+  --on-primary: #ffffff;
+  --primary-container: #b5ead7;
+  --on-primary-container: #ffffff;
+  --secondary: #4f625d;
+  --secondary-container: #cfe4dd;
+  --on-secondary-container: #536761;
+  --tertiary: #725736;
+  --on-tertiary: #ffffff;
+  --outline: #707976;
+  --outline-variant: #c0c8c5;
+  --highlight: #b5ead7;
+  --highlight-border: #4d8074;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  background-image:
+    radial-gradient(
+      circle at 20% 20%,
+      rgba(52, 103, 92, 0.08),
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 80% 0%,
+      rgba(181, 234, 215, 0.28),
+      transparent 40%
+    );
+  color: var(--on-background);
+  font-family: var(--font-geist-sans), "Geist", "Segoe UI", sans-serif;
+}
+
+.ambient-shadow {
+  box-shadow:
+    0 4px 12px rgba(112, 121, 117, 0.04),
+    0 1px 2px rgba(112, 121, 117, 0.02);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s ease-out both;
+}
