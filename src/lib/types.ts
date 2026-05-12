@@ -11,5 +11,5 @@ export type WordPathNode = {
 export type WordResult = {
   word: string;
   points: number;
-  path?: WordPathNode[];
+  path: WordPathNode[] | undefined;
 };

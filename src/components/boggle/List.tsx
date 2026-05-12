@@ -43,7 +43,7 @@ export function List({ results, activeWord, onSelectWord, onHoverWord }: ListPro
   }, [lengthFilter, query, results]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-on-surface">Found Words</h2>
         <Badge>{results.length} total</Badge>
@@ -80,7 +80,7 @@ export function List({ results, activeWord, onSelectWord, onHoverWord }: ListPro
           );
         })}
       </div>
-      <div className="mt-2 flex-1 overflow-y-auto pr-2">
+      <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-2">
         {filteredResults.length === 0 ? (
           <div className="rounded-md border border-dashed border-outline-variant px-4 py-6 text-center text-sm text-on-surface-variant">
             No words yet. Solve the board to see results.
