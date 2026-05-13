@@ -31,6 +31,35 @@
   --highlight-border: #4d8074;
 }
 
+html.dark {
+  --background: #0d1310;
+  --on-background: #eef4ec;
+  --surface: #101916;
+  --surface-dim: #17211c;
+  --surface-bright: #121a17;
+  --surface-container-lowest: #0e1611;
+  --surface-container-low: #17231c;
+  --surface-container: #1c2a22;
+  --surface-container-high: #26352e;
+  --surface-container-highest: #2f3f37;
+  --surface-variant: #24342d;
+  --on-surface: #e8f0e6;
+  --on-surface-variant: #97a596;
+  --primary: #83c3a0;
+  --on-primary: #0f1710;
+  --primary-container: #1a3327;
+  --on-primary-container: #d2f7db;
+  --secondary: #8fae9a;
+  --secondary-container: #20352c;
+  --on-secondary-container: #d4e9d8;
+  --tertiary: #b4956d;
+  --on-tertiary: #12150f;
+  --outline: #5c7166;
+  --outline-variant: #3f564a;
+  --highlight: #6ea88c;
+  --highlight-border: #5a8b73;
+}
+
 * {
   box-sizing: border-box;
 }
