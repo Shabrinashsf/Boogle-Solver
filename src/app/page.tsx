@@ -215,12 +215,33 @@ export default function Home() {
   const [hoveredWord, setHoveredWord] = React.useState<WordResult | null>(null);
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [isSolving, setIsSolving] = React.useState(false);
+  const [theme, setTheme] = React.useState<"light" | "dark">("light");
   const [targetInputError, setTargetInputError] = React.useState<string | null>(
     null
   );
   const [invalidCells, setInvalidCells] = React.useState<Set<string>>(
     () => new Set()
   );
+
+  React.useEffect(() => {
+    const storedTheme = window.localStorage.getItem("theme");
+    const prefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    ).matches;
+    const initialTheme =
+      storedTheme === "dark" || (!storedTheme && prefersDark)
+        ? "dark"
+        : "light";
+    setTheme(initialTheme);
+    document.documentElement.classList.toggle("dark", initialTheme === "dark");
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    window.localStorage.setItem("theme", nextTheme);
+    document.documentElement.classList.toggle("dark", nextTheme === "dark");
+  };
 
   const selectedResult = React.useMemo(
     () => results.find((item) => item.word === activeWord) ?? null,
@@ -325,7 +346,32 @@ export default function Home() {
       }
 
       const data = (await response.json()) as unknown;
-      setResults(normalizeResults(data));
+
+      if (mode === "target") {
+        const targetUpper = targetWord.trim().toUpperCase();
+        const found = Boolean(
+          data && typeof data === "object" && (data as Record<string, unknown>).found
+        );
+        const path = normalizePath(
+          data && typeof data === "object"
+            ? (data as Record<string, unknown>).path
+            : undefined
+        );
+
+        setResults(
+          found && targetUpper
+            ? [
+                {
+                  word: targetUpper,
+                  points: scoreWord(targetUpper),
+                  path,
+                },
+              ]
+            : []
+        );
+      } else {
+        setResults(normalizeResults(data));
+      }
     } catch (error) {
       setResults(buildFallbackResults(board, minLength));
     } finally {
@@ -350,8 +396,15 @@ export default function Home() {
           >
             <span className="material-symbols-outlined">help_outline</span>
           </button>
-          <button className="rounded-full p-2 text-on-surface-variant hover:bg-surface-container-high">
-            <span className="material-symbols-outlined">dark_mode</span>
+          <button
+            className="rounded-full p-2 text-on-surface-variant hover:bg-surface-container-high"
+            type="button"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            <span className="material-symbols-outlined">
+              {theme === "dark" ? "light_mode" : "dark_mode"}
+            </span>
           </button>
         </div>
       </header>

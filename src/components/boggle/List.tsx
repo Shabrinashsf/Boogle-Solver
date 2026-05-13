@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import type { WordResult } from "@/lib/types";
 
-type LengthFilter = "all" | 6 | 7 | 8;
+type LengthFilter = "all" | 3 | 4 | 5 | 6 | 7 | 8;
 
 type ListProps = {
   results: WordResult[];
@@ -20,6 +20,9 @@ const lengthFilters: Array<{ label: string; value: LengthFilter }> = [
   { label: "8+ letters", value: 8 },
   { label: "7 letters", value: 7 },
   { label: "6 letters", value: 6 },
+  { label: "5 letters", value: 5 },
+  { label: "4 letters", value: 4 },
+  { label: "3 letters", value: 3 },
 ];
 
 export function List({ results, activeWord, onSelectWord, onHoverWord }: ListProps) {
@@ -93,7 +96,7 @@ export function List({ results, activeWord, onSelectWord, onHoverWord }: ListPro
               return (
                 <button
                   key={item.word}
-                  className={`flex items-center justify-between rounded-md border px-3 py-2 text-left transition-colors ${
+                  className={`flex items-center rounded-md border px-3 py-2 text-left transition-colors ${
                     active
                       ? "border-highlight-border bg-highlight"
                       : "border-transparent hover:bg-surface-container-low"
@@ -105,9 +108,6 @@ export function List({ results, activeWord, onSelectWord, onHoverWord }: ListPro
                 >
                   <span className="text-sm font-medium text-on-surface">
                     {item.word}
-                  </span>
-                  <span className="text-xs text-on-surface-variant">
-                    {item.points} pts
                   </span>
                 </button>
               );
