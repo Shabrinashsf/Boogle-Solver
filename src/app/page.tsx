@@ -458,7 +458,7 @@ export default function Home() {
       if (typeof data.algorithm === "string") {
         setUsedAlgorithm(data.algorithm);
       }
-    } catch (error) {
+    } catch {
       setResults(buildFallbackResults(board, minLength));
     } finally {
       setIsSolving(false);

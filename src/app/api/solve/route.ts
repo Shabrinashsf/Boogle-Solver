@@ -485,7 +485,6 @@ export async function POST(
       );
     }
 
-    const rows = board.length;
     const cols = board[0]?.length;
 
     if (cols < 3 || cols > 8) {
@@ -631,10 +630,21 @@ export async function POST(
 
       const start = performance.now();
 
-      // For target mode, all algorithms use the same DFS approach
-      // since target search doesn't benefit from Trie/HashMap pruning
-      const path = solveTargetTrieDfs(normalizedBoard, targetUpper);
-      const algoLabel = "DFS (Board Search)";
+      const { path, algoLabel } =
+        algorithmType === "hashmap_dfs"
+          ? {
+              path: solveTargetHashMapDfs(normalizedBoard, targetUpper),
+              algoLabel: "HashMap + DFS (Target)",
+            }
+          : algorithmType === "brute_dfs"
+          ? {
+              path: solveTargetBruteDfs(normalizedBoard, targetUpper),
+              algoLabel: "Brute Force + DFS (Target)",
+            }
+          : {
+              path: solveTargetTrieDfs(normalizedBoard, targetUpper),
+              algoLabel: "Trie + DFS (Target)",
+            };
 
       const elapsed = performance.now() - start;
 
