@@ -14,25 +14,58 @@ type WordResult = {
 
 type GlobalResponse = {
   mode: "global";
+  algorithm: string;
   results: WordResult[];
   meta: {
     total: number;
     min_length: number;
+    execution_time_ms: number;
   };
 };
 
 type TargetResponse = {
   mode: "target";
+  algorithm: string;
   target: string;
   found: boolean;
   path?: Cell[];
+  execution_time_ms: number;
+};
+
+type CompareResult = {
+  algorithm: string;
+  results: WordResult[];
+  execution_time_ms: number;
+  word_count: number;
+};
+
+type CompareResponse = {
+  mode: "global";
+  comparison: CompareResult[];
+  meta: {
+    min_length: number;
+  };
 };
 
 type ErrorResponse = {
   error: string;
 };
 
-// Trie implementation
+type AlgorithmType = "trie_dfs" | "hashmap_dfs" | "brute_dfs";
+
+const DIRECTIONS = [
+  [-1, 0],
+  [-1, 1],
+  [0, 1],
+  [1, 1],
+  [1, 0],
+  [1, -1],
+  [0, -1],
+  [-1, -1],
+];
+
+// ─── Trie + DFS (original) ───────────────────────────────────
+
 class TrieNode {
   children: Map<string, TrieNode> = new Map();
   isEnd: boolean = false;
@@ -65,11 +98,6 @@ class Trie {
     return node;
   }
 
-  isWord(word: string): boolean {
-    const node = this.searchPrefix(word);
-    return node !== null && node.isEnd;
-  }
-
   hasPrefix(prefix: string): boolean {
     return this.searchPrefix(prefix) !== null;
   }
@@ -83,10 +111,8 @@ async function loadTrie(): Promise<Trie> {
   const trie = new Trie();
 
   try {
-    
     const fs = await import("fs/promises");
     const path = await import("path");
-    
     const filePath = path.join(process.cwd(), "public", "dictionary.txt");
     const text = await fs.readFile(filePath, "utf-8");
 
@@ -110,18 +136,44 @@ function hasVowel(word: string): boolean {
   return /[AEIOUY]/.test(word);
 }
 
-const directions = [
-  [-1, 0],
-  [-1, 1],
-  [0, 1],
-  [1, 1],
-  [1, 0],
-  [1, -1],
-  [0, -1],
-  [-1, -1],
-];
+// ─── HashMap (Set) + DFS ────────────────────────────────────
 
-function solveGlobal(board: string[][], trie: Trie, minLength: number): WordResult[] {
+let globalWordSet: Set<string> | null = null;
+
+async function loadWordSet(): Promise<Set<string>> {
+  if (globalWordSet) return globalWordSet;
+
+  const wordSet = new Set<string>();
+
+  try {
+    const fs = await import("fs/promises");
+    const path = await import("path");
+    const filePath = path.join(process.cwd(), "public", "dictionary.txt");
+    const text = await fs.readFile(filePath, "utf-8");
+
+    const lines = text.split("\n");
+    for (const line of lines) {
+      const word = line.trim().toUpperCase();
+      if (word.length >= 3 && /^[A-Z]+$/.test(word) && hasVowel(word)) {
+        wordSet.add(word);
+      }
+    }
+  } catch (error) {
+    console.error("Failed to load dictionary for word set:", error);
+    throw new Error("Failed to load dictionary");
+  }
+
+  globalWordSet = wordSet;
+  return wordSet;
+}
+
+// ─── Solver: Trie + DFS ─────────────────────────────────────
+
+function solveTrieDfs(
+  board: string[][],
+  trie: Trie,
+  minLength: number
+): WordResult[] {
   const rows = board.length;
   const cols = board[0].length;
   const found = new Map<string, WordResult>();
@@ -157,7 +209,7 @@ function solveGlobal(board: string[][], trie: Trie, minLength: number): WordResu
       }
     }
 
-    for (const [dr, dc] of directions) {
+    for (const [dr, dc] of DIRECTIONS) {
       const nr = r + dr;
       const nc = c + dc;
       if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !visited[nr][nc]) {
@@ -170,7 +222,9 @@ function solveGlobal(board: string[][], trie: Trie, minLength: number): WordResu
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
+      const visited = Array.from({ length: rows }, () =>
+        Array(cols).fill(false)
+      );
       dfs(r, c, visited, "", trie.root, []);
     }
   }
@@ -178,7 +232,172 @@ function solveGlobal(board: string[][], trie: Trie, minLength: number): WordResu
   return Array.from(found.values());
 }
 
-function solveTarget(board: string[][], target: string): Cell[] | null {
+// ─── Solver: HashMap (Set) + DFS ─────────────────────────────
+
+function solveHashMapDfs(
+  board: string[][],
+  wordSet: Set<string>,
+  minLength: number
+): WordResult[] {
+  const rows = board.length;
+  const cols = board[0].length;
+  const found = new Map<string, WordResult>();
+  let maxLength = 0;
+  for (const w of wordSet) {
+    if (w.length > maxLength) maxLength = w.length;
+  }
+
+  function dfs(
+    r: number,
+    c: number,
+    visited: boolean[][],
+    current: string,
+    path: Cell[]
+  ) {
+    const letter = board[r][c].toUpperCase();
+    const newWord = current + letter;
+
+    if (newWord.length > maxLength) {
+      return;
+    }
+
+    visited[r][c] = true;
+    const newPath = [...path, { r, c }];
+
+    if (newWord.length >= minLength && wordSet.has(newWord)) {
+      if (!found.has(newWord)) {
+        found.set(newWord, {
+          word: newWord,
+          length: newWord.length,
+          path: newPath,
+        });
+      }
+    }
+
+    for (const [dr, dc] of DIRECTIONS) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !visited[nr][nc]) {
+        dfs(nr, nc, visited, newWord, newPath);
+      }
+    }
+
+    visited[r][c] = false;
+  }
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const visited = Array.from({ length: rows }, () =>
+        Array(cols).fill(false)
+      );
+      dfs(r, c, visited, "", []);
+    }
+  }
+
+  return Array.from(found.values());
+}
+
+// ─── Solver: Brute Force DFS (no pruning) ───────────────────
+
+let globalDictionaryWords: string[] | null = null;
+
+async function loadDictionaryWords(): Promise<string[]> {
+  if (globalDictionaryWords) return globalDictionaryWords;
+
+  const words: string[] = [];
+
+  try {
+    const fs = await import("fs/promises");
+    const path = await import("path");
+    const filePath = path.join(process.cwd(), "public", "dictionary.txt");
+    const text = await fs.readFile(filePath, "utf-8");
+
+    const lines = text.split("\n");
+    for (const line of lines) {
+      const word = line.trim().toUpperCase();
+      if (word.length >= 3 && /^[A-Z]+$/.test(word) && hasVowel(word)) {
+        words.push(word);
+      }
+    }
+  } catch (error) {
+    console.error("Failed to load dictionary for brute force:", error);
+    throw new Error("Failed to load dictionary");
+  }
+
+  globalDictionaryWords = words;
+  return words;
+}
+
+function solveBruteDfs(
+  board: string[][],
+  dictionaryWords: string[],
+  minLength: number
+): WordResult[] {
+  const rows = board.length;
+  const cols = board[0].length;
+  let maxWordLen = minLength;
+  for (const w of dictionaryWords) {
+    if (w.length > maxWordLen) maxWordLen = w.length;
+  }
+  const wordSet = new Set(dictionaryWords.filter((w) => w.length >= minLength));
+  const found = new Map<string, WordResult>();
+
+  function dfs(
+    r: number,
+    c: number,
+    visited: boolean[][],
+    current: string,
+    path: Cell[]
+  ) {
+    const letter = board[r][c].toUpperCase();
+    const newWord = current + letter;
+
+    if (newWord.length > maxWordLen) {
+      return;
+    }
+
+    visited[r][c] = true;
+    const newPath = [...path, { r, c }];
+
+    if (newWord.length >= minLength && wordSet.has(newWord)) {
+      if (!found.has(newWord)) {
+        found.set(newWord, {
+          word: newWord,
+          length: newWord.length,
+          path: newPath,
+        });
+      }
+    }
+
+    for (const [dr, dc] of DIRECTIONS) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !visited[nr][nc]) {
+        dfs(nr, nc, visited, newWord, newPath);
+      }
+    }
+
+    visited[r][c] = false;
+  }
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const visited = Array.from({ length: rows }, () =>
+        Array(cols).fill(false)
+      );
+      dfs(r, c, visited, "", []);
+    }
+  }
+
+  return Array.from(found.values());
+}
+
+// ─── Target solvers ──────────────────────────────────────────
+
+function solveTargetTrieDfs(
+  board: string[][],
+  target: string
+): Cell[] | null {
   const rows = board.length;
   const cols = board[0].length;
   const targetUpper = target.toUpperCase();
@@ -201,7 +420,7 @@ function solveTarget(board: string[][], target: string): Cell[] | null {
       return newPath;
     }
 
-    for (const [dr, dc] of directions) {
+    for (const [dr, dc] of DIRECTIONS) {
       const nr = r + dr;
       const nc = c + dc;
       if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !visited[nr][nc]) {
@@ -218,7 +437,9 @@ function solveTarget(board: string[][], target: string): Cell[] | null {
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
+      const visited = Array.from({ length: rows }, () =>
+        Array(cols).fill(false)
+      );
       const result = dfs(r, c, visited, 0, []);
       if (result) {
         return result;
@@ -229,12 +450,32 @@ function solveTarget(board: string[][], target: string): Cell[] | null {
   return null;
 }
 
+function solveTargetHashMapDfs(
+  board: string[][],
+  target: string
+): Cell[] | null {
+  return solveTargetTrieDfs(board, target);
+}
+
+function solveTargetBruteDfs(
+  board: string[][],
+  target: string
+): Cell[] | null {
+  return solveTargetTrieDfs(board, target);
+}
+
+// ─── API Route ───────────────────────────────────────────────
+
 export async function POST(
   request: NextRequest
-): Promise<NextResponse<GlobalResponse | TargetResponse | ErrorResponse>> {
+): Promise<
+  NextResponse<
+    GlobalResponse | TargetResponse | CompareResponse | ErrorResponse
+  >
+> {
   try {
     const body = await request.json();
-    const { board, mode, target, min_length } = body;
+    const { board, mode, target, min_length, algorithm } = body;
 
     // Validate board
     if (!Array.isArray(board) || board.length < 3 || board.length > 8) {
@@ -254,7 +495,6 @@ export async function POST(
       );
     }
 
-    // Normalize board
     const normalizedBoard = board.map((row: string[]) =>
       row.map((cell: string) => (typeof cell === "string" ? cell.toUpperCase() : ""))
     );
@@ -267,9 +507,72 @@ export async function POST(
       );
     }
 
-    // Load trie
-    const trie = await loadTrie();
+    const algorithmType: AlgorithmType =
+      algorithm === "hashmap_dfs" || algorithm === "brute_dfs"
+        ? algorithm
+        : "trie_dfs";
 
+    // Compare mode: run all three algorithms
+    if (algorithm === "compare_all" && mode === "global") {
+      const minLen = min_length || 3;
+      if (minLen < 3) {
+        return NextResponse.json(
+          { error: "min_length must be at least 3" },
+          { status: 400 }
+        );
+      }
+
+      const [trie, wordSet, dictWords] = await Promise.all([
+        loadTrie(),
+        loadWordSet(),
+        loadDictionaryWords(),
+      ]);
+
+      const comparison: CompareResult[] = [];
+
+      // Trie + DFS
+      const t0 = performance.now();
+      const trieResults = solveTrieDfs(normalizedBoard, trie, minLen);
+      const t1 = performance.now();
+      comparison.push({
+        algorithm: "Trie + DFS",
+        results: trieResults,
+        execution_time_ms: Math.round((t1 - t0) * 1000) / 1000,
+        word_count: trieResults.length,
+      });
+
+      // HashMap + DFS
+      const t2 = performance.now();
+      const hashMapResults = solveHashMapDfs(normalizedBoard, wordSet, minLen);
+      const t3 = performance.now();
+      comparison.push({
+        algorithm: "HashMap + DFS",
+        results: hashMapResults,
+        execution_time_ms: Math.round((t3 - t2) * 1000) / 1000,
+        word_count: hashMapResults.length,
+      });
+
+      // Brute Force + DFS
+      const t4 = performance.now();
+      const bruteResults = solveBruteDfs(normalizedBoard, dictWords, minLen);
+      const t5 = performance.now();
+      comparison.push({
+        algorithm: "Brute Force + DFS",
+        results: bruteResults,
+        execution_time_ms: Math.round((t5 - t4) * 1000) / 1000,
+        word_count: bruteResults.length,
+      });
+
+      return NextResponse.json({
+        mode: "global",
+        comparison,
+        meta: {
+          min_length: minLen,
+        },
+      });
+    }
+
+    // Single algorithm mode
     if (mode === "global") {
       const minLen = min_length || 3;
       if (minLen < 3) {
@@ -279,17 +582,38 @@ export async function POST(
         );
       }
 
-      const results = solveGlobal(normalizedBoard, trie, minLen);
+      let results: WordResult[];
+      let algoLabel: string;
+      const start = performance.now();
+
+      if (algorithmType === "hashmap_dfs") {
+        const wordSet = await loadWordSet();
+        results = solveHashMapDfs(normalizedBoard, wordSet, minLen);
+        algoLabel = "HashMap + DFS";
+      } else if (algorithmType === "brute_dfs") {
+        const dictWords = await loadDictionaryWords();
+        results = solveBruteDfs(normalizedBoard, dictWords, minLen);
+        algoLabel = "Brute Force + DFS";
+      } else {
+        const trie = await loadTrie();
+        results = solveTrieDfs(normalizedBoard, trie, minLen);
+        algoLabel = "Trie + DFS";
+      }
+
+      const elapsed = performance.now() - start;
 
       return NextResponse.json({
         mode: "global",
+        algorithm: algoLabel,
         results,
         meta: {
           total: results.length,
           min_length: minLen,
+          execution_time_ms: Math.round(elapsed * 1000) / 1000,
         },
       });
     } else {
+      // Target mode
       if (!target || typeof target !== "string") {
         return NextResponse.json(
           { error: "target word is required for target mode" },
@@ -305,13 +629,24 @@ export async function POST(
         );
       }
 
-      const path = solveTarget(normalizedBoard, targetUpper);
+      let path: Cell[] | null;
+      let algoLabel: string;
+      const start = performance.now();
+
+      // For target mode, all algorithms use the same DFS approach
+      // since target search doesn't benefit from Trie/HashMap pruning
+      path = solveTargetTrieDfs(normalizedBoard, targetUpper);
+      algoLabel = "DFS (Board Search)";
+
+      const elapsed = performance.now() - start;
 
       return NextResponse.json({
         mode: "target",
+        algorithm: algoLabel,
         target: targetUpper,
         found: path !== null,
         path: path || undefined,
+        execution_time_ms: Math.round(elapsed * 1000) / 1000,
       });
     }
   } catch (error) {

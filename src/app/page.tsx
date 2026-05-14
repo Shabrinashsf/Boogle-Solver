@@ -7,9 +7,42 @@ import { List } from "@/components/boggle/List";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import type { WordPathNode, WordResult } from "@/lib/types";
+import type {
+  AlgorithmOption,
+  AlgorithmType,
+  ComparisonResult,
+  WordPathNode,
+  WordResult,
+} from "@/lib/types";
 
 type SolverMode = "global" | "target";
+
+const ALGORITHM_OPTIONS: AlgorithmOption[] = [
+  {
+    value: "trie_dfs",
+    label: "Trie + DFS",
+    description:
+      "Prefix-tree pruning eliminates entire branches early. Best for large boards.",
+  },
+  {
+    value: "hashmap_dfs",
+    label: "HashMap + DFS",
+    description:
+      "Hash-set word lookup with max-length pruning. Simpler data structure, no prefix optimization.",
+  },
+  {
+    value: "brute_dfs",
+    label: "Brute Force + DFS",
+    description:
+      "Explores all paths up to max word length, then checks dictionary. No prefix pruning.",
+  },
+  {
+    value: "compare_all",
+    label: "Compare All",
+    description:
+      "Runs all three algorithms side-by-side and shows a speed comparison table.",
+  },
+];
 
 const sizeOptions = [
   { label: "3x3 (Mini)", value: 3 },
@@ -76,22 +109,22 @@ const normalizePath = (path: unknown): WordPathNode[] | undefined => {
           typeof record.row === "number"
             ? record.row
             : typeof record.r === "number"
-            ? record.r
-            : typeof record.row === "string"
-            ? Number(record.row)
-            : typeof record.r === "string"
-            ? Number(record.r)
-            : NaN;
+              ? record.r
+              : typeof record.row === "string"
+                ? Number(record.row)
+                : typeof record.r === "string"
+                  ? Number(record.r)
+                  : NaN;
         const col =
           typeof record.col === "number"
             ? record.col
             : typeof record.c === "number"
-            ? record.c
-            : typeof record.col === "string"
-            ? Number(record.col)
-            : typeof record.c === "string"
-            ? Number(record.c)
-            : NaN;
+              ? record.c
+              : typeof record.col === "string"
+                ? Number(record.col)
+                : typeof record.c === "string"
+                  ? Number(record.c)
+                  : NaN;
 
         if (Number.isFinite(row) && Number.isFinite(col)) {
           return { row, col };
@@ -132,6 +165,7 @@ const normalizeResults = (data: unknown): WordResult[] => {
         text?: string;
         points?: number;
         score?: number;
+        length?: number;
         path?: unknown;
         cells?: unknown;
         coords?: unknown;
@@ -206,6 +240,7 @@ const buildFallbackResults = (board: string[][], minLength: number) => {
 
 export default function Home() {
   const [mode, setMode] = React.useState<SolverMode>("global");
+  const [algorithm, setAlgorithm] = React.useState<AlgorithmType>("trie_dfs");
   const [boardSize, setBoardSize] = React.useState(4);
   const [board, setBoard] = React.useState(() => createEmptyBoard(4));
   const [minLength, setMinLength] = React.useState(3);
@@ -216,6 +251,9 @@ export default function Home() {
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [isSolving, setIsSolving] = React.useState(false);
   const [theme, setTheme] = React.useState<"light" | "dark">("light");
+  const [executionTime, setExecutionTime] = React.useState<number | null>(null);
+  const [usedAlgorithm, setUsedAlgorithm] = React.useState<string | null>(null);
+  const [comparison, setComparison] = React.useState<ComparisonResult[] | null>(null);
   const [targetInputError, setTargetInputError] = React.useState<string | null>(
     null
   );
@@ -297,6 +335,9 @@ export default function Home() {
     setActiveWord(null);
     setHoveredWord(null);
     setInvalidCells(new Set());
+    setExecutionTime(null);
+    setUsedAlgorithm(null);
+    setComparison(null);
   };
 
   const handleRandomFill = () => {
@@ -305,6 +346,9 @@ export default function Home() {
     setActiveWord(null);
     setHoveredWord(null);
     setInvalidCells(new Set());
+    setExecutionTime(null);
+    setUsedAlgorithm(null);
+    setComparison(null);
   };
 
   const handleSizeChange = (value: number) => {
@@ -314,17 +358,24 @@ export default function Home() {
     setActiveWord(null);
     setHoveredWord(null);
     setInvalidCells(new Set());
+    setExecutionTime(null);
+    setUsedAlgorithm(null);
+    setComparison(null);
   };
 
   const handleSolve = async () => {
     setIsSolving(true);
     setHoveredWord(null);
     setActiveWord(null);
+    setExecutionTime(null);
+    setUsedAlgorithm(null);
+    setComparison(null);
 
     try {
       const payload: Record<string, unknown> = {
         board,
         mode,
+        algorithm,
       };
 
       if (mode === "global") {
@@ -345,17 +396,40 @@ export default function Home() {
         throw new Error("Solver response not available");
       }
 
-      const data = (await response.json()) as unknown;
+      const data = (await response.json()) as Record<string, unknown>;
+
+      // Comparison mode
+      if (
+        algorithm === "compare_all" &&
+        mode === "global" &&
+        Array.isArray(data.comparison)
+      ) {
+        const comp = (data.comparison as ComparisonResult[]).map((item) => ({
+          ...item,
+          execution_time_ms:
+            typeof item.execution_time_ms === "number"
+              ? item.execution_time_ms
+              : Number(item.execution_time_ms),
+          word_count:
+            typeof item.word_count === "number"
+              ? item.word_count
+              : Number(item.word_count),
+        }));
+
+        setComparison(comp);
+
+        // Use the first algorithm's results as default display
+        const firstResults = data.comparison[0]?.results;
+        setResults(normalizeResults(firstResults));
+        setUsedAlgorithm("Compare All");
+        return;
+      }
 
       if (mode === "target") {
         const targetUpper = targetWord.trim().toUpperCase();
-        const found = Boolean(
-          data && typeof data === "object" && (data as Record<string, unknown>).found
-        );
+        const found = Boolean(data && typeof data === "object" && data.found);
         const path = normalizePath(
-          data && typeof data === "object"
-            ? (data as Record<string, unknown>).path
-            : undefined
+          data && typeof data === "object" ? data.path : undefined
         );
 
         setResults(
@@ -372,12 +446,28 @@ export default function Home() {
       } else {
         setResults(normalizeResults(data));
       }
+
+      if (typeof data.execution_time_ms === "number") {
+        setExecutionTime(data.execution_time_ms);
+      } else if (data.meta && typeof (data.meta as Record<string, unknown>).execution_time_ms === "number") {
+        setExecutionTime(
+          (data.meta as Record<string, unknown>).execution_time_ms as number
+        );
+      }
+
+      if (typeof data.algorithm === "string") {
+        setUsedAlgorithm(data.algorithm);
+      }
     } catch (error) {
       setResults(buildFallbackResults(board, minLength));
     } finally {
       setIsSolving(false);
     }
   };
+
+  const selectedAlgoOption = ALGORITHM_OPTIONS.find(
+    (opt) => opt.value === algorithm
+  );
 
   return (
     <div className="min-h-screen bg-background text-on-background">
@@ -490,6 +580,32 @@ export default function Home() {
                   )}
                 </div>
               )}
+
+              {/* Algorithm Selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-on-surface-variant">
+                  Algorithm
+                </label>
+                <select
+                  className="w-full rounded-md border border-outline-variant bg-surface-bright px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  value={algorithm}
+                  onChange={(event) =>
+                    setAlgorithm(event.target.value as AlgorithmType)
+                  }
+                >
+                  {ALGORITHM_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                {selectedAlgoOption && (
+                  <p className="text-[11px] text-on-surface-variant leading-snug">
+                    {selectedAlgoOption.description}
+                  </p>
+                )}
+              </div>
+
               <div className="space-y-2">
                 <label className="text-xs font-medium text-on-surface-variant">
                   Grid Size
@@ -542,9 +658,37 @@ export default function Home() {
                 }
                 onClick={handleSolve}
               >
-                <span className="material-symbols-outlined text-[18px]">search</span>
-                {isSolving ? "Solving..." : "Solve Board"}
+                {isSolving ? (
+                  <>
+                    <span className="spinner" />
+                    Solving...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[18px]">search</span>
+                    Solve Board
+                  </>
+                )}
               </Button>
+
+              {/* Execution Time Display */}
+              {executionTime !== null && (
+                <div className="rounded-md border border-outline-variant bg-surface-container-low px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-on-surface-variant">
+                      Execution Time
+                    </span>
+                    <span className="text-sm font-semibold text-primary">
+                      {executionTime.toFixed(2)} ms
+                    </span>
+                  </div>
+                  {usedAlgorithm && (
+                    <p className="mt-1 text-[11px] text-on-surface-variant">
+                      Algorithm: {usedAlgorithm}
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -614,6 +758,52 @@ export default function Home() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Comparison Table */}
+          {comparison && (
+            <Card className="animate-fade-up">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Algorithm Comparison</CardTitle>
+              </CardHeader>
+              <CardContent className="mt-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-outline-variant">
+                        <th className="pb-2 text-left font-medium text-on-surface-variant">Algorithm</th>
+                        <th className="pb-2 text-right font-medium text-on-surface-variant">Time (ms)</th>
+                        <th className="pb-2 text-right font-medium text-on-surface-variant">Words Found</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparison.map((row) => {
+                        const fastest = Math.min(...comparison.map((r) => r.execution_time_ms));
+                        const isFastest = row.execution_time_ms === fastest;
+                        return (
+                          <tr key={row.algorithm} className="border-b border-outline-variant/50">
+                            <td className="py-2 font-medium text-on-surface">
+                              {row.algorithm}
+                              {isFastest && (
+                                <span className="ml-2 inline-flex rounded-full bg-highlight px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                  Fastest
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 text-right font-mono text-on-surface">
+                              {row.execution_time_ms.toFixed(2)}
+                            </td>
+                            <td className="py-2 text-right text-on-surface-variant">
+                              {row.word_count}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </section>
 
         <aside className="md:col-span-3 flex flex-col gap-6 md:h-[calc(100vh-7rem)]">
@@ -656,9 +846,20 @@ export default function Home() {
                 solve in two modes: Global Discovery or Target Word.
               </p>
               <p>
-                Click any found word to visualize its path on the board. Use
-                Clear Board or Random Fill to reset the grid quickly.
+                Choose from three search algorithms or use <strong>Compare All</strong> to
+                run them side-by-side and compare execution speed.
               </p>
+              <div className="space-y-2 pt-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-on-surface">
+                  Algorithms
+                </p>
+                <ul className="space-y-1 text-xs">
+                  <li><strong>Trie + DFS:</strong> Prefix-tree pruning cuts entire branches early. Best for large boards.</li>
+                  <li><strong>HashMap + DFS:</strong> Hash-set word lookup with max-length bound. Simpler structure, no prefix optimization.</li>
+                  <li><strong>Brute Force + DFS:</strong> Explores all paths up to max word length, then checks against dictionary. No pruning at all.</li>
+                  <li><strong>Compare All:</strong> Runs all three and shows a speed comparison table.</li>
+                </ul>
+              </div>
             </CardContent>
           </Card>
         </div>
