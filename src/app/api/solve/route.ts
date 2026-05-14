@@ -629,14 +629,12 @@ export async function POST(
         );
       }
 
-      let path: Cell[] | null;
-      let algoLabel: string;
       const start = performance.now();
 
       // For target mode, all algorithms use the same DFS approach
       // since target search doesn't benefit from Trie/HashMap pruning
-      path = solveTargetTrieDfs(normalizedBoard, targetUpper);
-      algoLabel = "DFS (Board Search)";
+      const path = solveTargetTrieDfs(normalizedBoard, targetUpper);
+      const algoLabel = "DFS (Board Search)";
 
       const elapsed = performance.now() - start;
 
