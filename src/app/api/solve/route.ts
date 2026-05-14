@@ -83,37 +83,12 @@ async function loadTrie(): Promise<Trie> {
   const trie = new Trie();
 
   try {
-    const dictPath =
-      process.env.NODE_ENV === "production"
-        ? "/api/dictionary.txt"
-        : "./api/dictionary.txt";
-
-    const dictUrl = process.env.NODE_ENV === "production" ? dictPath : dictPath;
-
-    let text: string;
-    if (process.env.NODE_ENV === "production") {
-      // In production, read from public/api/dictionary.txt
-      const fs = await import("fs/promises");
-      const path = await import("path");
-      try {
-        const filePath = path.join(process.cwd(), "public", "api", "dictionary.txt");
-        text = await fs.readFile(filePath, "utf-8");
-      } catch {
-        // Fallback to api/dictionary.txt
-        const filePath = path.join(process.cwd(), "api", "dictionary.txt");
-        text = await fs.readFile(filePath, "utf-8");
-      }
-    } else {
-      const fs = await import("fs/promises");
-      const path = await import("path");
-      try {
-        const filePath = path.join(process.cwd(), "api", "dictionary.txt");
-        text = await fs.readFile(filePath, "utf-8");
-      } catch {
-        const filePath = path.join(process.cwd(), "public", "api", "dictionary.txt");
-        text = await fs.readFile(filePath, "utf-8");
-      }
-    }
+    
+    const fs = await import("fs/promises");
+    const path = await import("path");
+    
+    const filePath = path.join(process.cwd(), "public", "dictionary.txt");
+    const text = await fs.readFile(filePath, "utf-8");
 
     const lines = text.split("\n");
     for (const line of lines) {
